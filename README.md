@@ -166,10 +166,11 @@ Frontend is a static Vite build, so it deploys straight to Vercel. The backend h
 **Frontend** is already live at the URL above (Vercel project `velozity-dashboard`), built with `VITE_API_URL` pointed at the backend.
 
 **Backend** deploys via the `render.yaml` blueprint in this repo:
-1. On Render: New → Blueprint → connect `aayush-arya/velozity-fullstack`. It'll read `render.yaml` and set up a free Postgres DB plus the web service together, already wired to each other.
-2. Hit Apply and wait for the first deploy.
-3. One time only — open the service's Shell tab and run `npm run seed`. I didn't wire this into the start command on purpose, so a later restart never quietly wipes out real activity.
-4. If you rename the service from `velozity-dashboard-api`, update `CORS_ORIGIN` in `render.yaml` and the `VITE_API_URL` env var on Vercel to match, then redeploy both.
+1. On Render: New → Blueprint → connect `aayush-arya/velozity-fullstack`. It reads `render.yaml` and sets up the web service. It does **not** provision a database — Render's free tier only allows one active free Postgres per account, so the blueprint leaves `DATABASE_URL` for you to fill in instead of fighting over that.
+2. Once the service exists, go to its Environment tab and set `DATABASE_URL`. Either point it at a Postgres instance you already have on Render, or spin up a free one on [Neon](https://neon.tech) — either works, Prisma doesn't care who's hosting it.
+3. Redeploy so it picks up the new env var. `prisma migrate deploy` runs automatically as part of the start command.
+4. One time only — open the service's Shell tab and run `npm run seed`. Didn't wire this into the start command on purpose, so a later restart never quietly wipes out real activity.
+5. If you rename the service from `velozity-dashboard-api`, update `CORS_ORIGIN` in `render.yaml` and the `VITE_API_URL` env var on Vercel to match, then redeploy both.
 
 Render's free tier sleeps after inactivity, so the first request after a while will be slow while it wakes up.
 
