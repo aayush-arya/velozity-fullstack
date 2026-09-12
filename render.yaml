@@ -4,7 +4,12 @@ services:
     runtime: node
     plan: free
     rootDir: backend
-    buildCommand: npm install && npx prisma generate && npm run build
+    # --include=dev: NODE_ENV=production (set below, for the running service)
+    # also applies during the build, which makes a plain `npm install` skip
+    # devDependencies - but @types/* and typescript itself live there, and
+    # tsc needs them to compile. Nothing from devDependencies ends up in the
+    # final dist/ output either way, so this only affects build time.
+    buildCommand: npm install --include=dev && npx prisma generate && npm run build
     startCommand: npx prisma migrate deploy && node dist/index.js
     healthCheckPath: /health
     envVars:
