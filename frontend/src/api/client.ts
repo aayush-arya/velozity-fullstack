@@ -18,6 +18,7 @@ export function getAccessToken() {
 export const api = axios.create({
   baseURL: `${API_URL}/api`,
   withCredentials: true, // sends the HttpOnly refresh cookie on same-site/CORS requests
+  timeout: 15_000, // an unreachable/sleeping backend should fail fast, not hang the UI forever
 });
 
 api.interceptors.request.use((config) => {
@@ -36,7 +37,7 @@ let refreshPromise: Promise<string> | null = null;
 async function refreshAccessToken(): Promise<string> {
   if (!refreshPromise) {
     refreshPromise = axios
-      .post<{ accessToken: string }>(`${API_URL}/api/auth/refresh`, {}, { withCredentials: true })
+      .post<{ accessToken: string }>(`${API_URL}/api/auth/refresh`, {}, { withCredentials: true, timeout: 15_000 })
       .then((res) => {
         setAccessToken(res.data.accessToken);
         return res.data.accessToken;
