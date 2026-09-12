@@ -2,7 +2,8 @@
 
 Internal dashboard for a small agency to manage client projects, assign tasks, and see what's happening across the team in real time.
 
-- **Live app:** https://velozity-dashboard-two.vercel.app (frontend is live — you'll need to spin up the backend with the Render blueprint below for it to actually do anything, see Deployment)
+- **Live app:** https://velozity-dashboard-two.vercel.app
+- **API:** https://velozity-dashboard-api-sltf.onrender.com (Render appended `-sltf` since the plain name was already taken by someone else)
 - **Repo:** https://github.com/aayush-arya/velozity-fullstack
 
 ## Stack
@@ -170,7 +171,7 @@ Frontend is a static Vite build, so it deploys straight to Vercel. The backend h
 2. Once the service exists, go to its Environment tab and set `DATABASE_URL`. Either point it at a Postgres instance you already have on Render, or spin up a free one on [Neon](https://neon.tech) — either works, Prisma doesn't care who's hosting it.
 3. Redeploy so it picks up the new env var. `prisma migrate deploy` runs automatically as part of the start command.
 4. One time only — open the service's Shell tab and run `npm run seed`. Didn't wire this into the start command on purpose, so a later restart never quietly wipes out real activity.
-5. If you rename the service from `velozity-dashboard-api`, update `CORS_ORIGIN` in `render.yaml` and the `VITE_API_URL` env var on Vercel to match, then redeploy both.
+5. Render service hostnames are global, so if `velozity-dashboard-api` (or whatever you name it) is already taken, Render silently appends a random suffix to the actual URL — check the deploy log for "Available at your primary URL" and use that. If it's not the plain name, update `CORS_ORIGIN` in `render.yaml` and the `VITE_API_URL` env var on Vercel to match, then redeploy both.
 
 Render's free tier sleeps after inactivity, so the first request after a while will be slow while it wakes up.
 
