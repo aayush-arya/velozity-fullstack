@@ -2,8 +2,8 @@
 
 A real-time internal dashboard for a small agency: role-based project/task management with a live, role-filtered activity feed, presence, and notifications.
 
-- **Live app:** _add after deploying (see [Deployment](#deployment))_
-- **Repo:** _add after pushing to GitHub_
+- **Live app:** https://velozity-dashboard-two.vercel.app _(frontend is live; connect the backend via the Render Blueprint below to make it fully functional - see [Deployment](#deployment))_
+- **Repo:** https://github.com/aayush-arya/velozity-fullstack
 
 ## Tech stack
 
@@ -194,8 +194,18 @@ All seeded users share the password **`Password123!`**:
 
 ## Deployment
 
-The frontend (a static Vite build) deploys cleanly to Vercel. The backend needs a **persistent** Node process — it holds long-lived WebSocket connections and runs an in-process `node-cron` scheduler — which doesn't fit Vercel's serverless functions. It deploys as-is (see `backend/Dockerfile`) to any container/VM host that runs a long-lived process (Render, Railway, Fly.io, a plain VM, etc.) with a reachable Postgres instance (e.g. Neon, Supabase, or the same host's managed Postgres).
+The frontend (a static Vite build) deploys cleanly to Vercel. The backend needs a **persistent** Node process — it holds long-lived WebSocket connections and runs an in-process `node-cron` scheduler — which doesn't fit Vercel's serverless functions, so it's deployed separately as a long-running web service with its own Postgres instance.
 
-Environment variables needed in production, for each service — see `backend/.env.example` and `frontend/.env.example`:
-- Backend: `DATABASE_URL`, `CORS_ORIGIN` (your deployed frontend origin), `ACCESS_TOKEN_SECRET`, `REFRESH_TOKEN_SECRET` (generate with `openssl rand -hex 64`), `NODE_ENV=production`.
-- Frontend: `VITE_API_URL` (your deployed backend origin).
+**Frontend — live at https://velozity-dashboard-two.vercel.app** (Vercel project `velozity-dashboard`), built from `frontend/` with `VITE_API_URL` set to the backend URL below.
+
+**Backend — deploy via the included Render Blueprint (`render.yaml`):**
+1. On [Render](https://dashboard.render.com), choose **New → Blueprint** and connect the `aayush-arya/velozity-fullstack` GitHub repo. Render reads `render.yaml` at the repo root and provisions a free Postgres database (`velozity-dashboard-db`) plus a web service (`velozity-dashboard-api`) together, wired to each other automatically.
+2. Click **Apply** and wait for the first deploy to finish (`prisma migrate deploy` runs automatically as part of the start command).
+3. **One-time only:** open the `velozity-dashboard-api` service's **Shell** tab in the Render dashboard and run `npm run seed` to populate the demo accounts, projects, and activity log. (This is intentionally not run automatically on every boot, so a later restart never wipes real demo activity.)
+4. If you rename the service away from `velozity-dashboard-api`, update `CORS_ORIGIN` in `render.yaml` (or the service's environment variables in the Render dashboard) to match the frontend's actual origin, and update the frontend's `VITE_API_URL` Vercel environment variable to match the backend's actual `.onrender.com` URL, then redeploy both.
+
+Render's free tier spins the service down after periods of inactivity, so the first request after a while will be slow while it wakes back up.
+
+Environment variables needed in production (already wired in `render.yaml` for the backend) — see `backend/.env.example` and `frontend/.env.example` for the full list:
+- Backend: `DATABASE_URL`, `CORS_ORIGIN` (the deployed frontend origin), `ACCESS_TOKEN_SECRET` / `REFRESH_TOKEN_SECRET` (Render generates these), `NODE_ENV=production`.
+- Frontend: `VITE_API_URL` (the deployed backend origin).
