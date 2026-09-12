@@ -1,0 +1,186 @@
+// Client Project Dashboard - database schema
+// See README.md "Database design" section for the reasoning behind
+// denormalized fields and index choices.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  PM
+  DEVELOPER
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  IN_REVIEW
+  DONE
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum ActivityAction {
+  TASK_CREATED
+  STATUS_CHANGED
+  TASK_ASSIGNED
+  TASK_UPDATED
+  TASK_OVERDUE
+}
+
+enum NotificationType {
+  TASK_ASSIGNED
+  TASK_IN_REVIEW
+  TASK_OVERDUE
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         Role
+  createdAt    DateTime @default(now())
+
+  projectsCreated Project[]      @relation("ProjectCreatedBy")
+  tasksAssigned   Task[]         @relation("TaskAssignedTo")
+  tasksCreated    Task[]         @relation("TaskCreatedBy")
+  activityLogs    ActivityLog[]
+  notifications   Notification[]
+  refreshTokens   RefreshToken[]
+
+  // Role is filtered on almost every list/dashboard query (e.g. "all developers").
+  @@index([role])
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  revoked   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Looked up on every /auth/refresh call, and cleaned up per-user on logout.
+  @@index([userId])
+}
+
+model Client {
+  id        String   @id @default(cuid())
+  name      String
+  contact   String?
+  createdAt DateTime @default(now())
+
+  projects Project[]
+}
+
+model Project {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  clientId    String
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  client      Client        @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  createdBy   User          @relation("ProjectCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  tasks       Task[]
+  activityLog ActivityLog[]
+
+  // PM's "my projects" is the single most common project query -> index the FK.
+  @@index([createdById])
+  @@index([clientId])
+}
+
+model Task {
+  id            String     @id @default(cuid())
+  // Human-friendly sequential number ("Task #12") used in the activity feed
+  // and UI - the cuid primary key is stable but not something a human should
+  // have to read aloud.
+  number        Int        @default(autoincrement())
+  projectId     String
+  title         String
+  description   String?
+  assignedToId  String?
+  createdById   String
+  status        TaskStatus @default(TODO)
+  priority      Priority   @default(MEDIUM)
+  dueDate       DateTime
+  isOverdue     Boolean    @default(false)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  project      Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignedTo   User?          @relation("TaskAssignedTo", fields: [assignedToId], references: [id], onDelete: SetNull)
+  createdBy    User           @relation("TaskCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  activityLog  ActivityLog[]
+  notifications Notification[]
+
+  // Project board reads ("tasks in project X"); developer dashboard reads
+  // ("tasks assigned to me"); status/priority/dueDate power the shareable
+  // filter query params and the overdue cron sweep.
+  @@index([projectId])
+  @@index([assignedToId])
+  @@index([status])
+  @@index([priority])
+  @@index([dueDate])
+  @@index([projectId, status])
+  @@index([assignedToId, status])
+}
+
+model ActivityLog {
+  id         String         @id @default(cuid())
+  taskId     String
+  projectId  String
+  // Nullable because the overdue scheduler also writes activity entries and
+  // has no human actor to attribute them to (see jobs/overdueJob.ts) - the
+  // frontend renders those with a system/clock icon instead of a user avatar.
+  userId     String?
+  action     ActivityAction
+  fromStatus TaskStatus?
+  toStatus   TaskStatus?
+  message    String
+  createdAt  DateTime       @default(now())
+
+  task    Task    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  // projectId is denormalized off Task specifically so the role-filtered feed
+  // (admin: all, PM: own projects, developer: own tasks) and its "last 20 on
+  // reconnect" catchup query never need a join through Task just to scope by
+  // project - both read patterns are ORDER BY createdAt DESC on an indexed pair.
+  @@index([projectId, createdAt])
+  @@index([taskId, createdAt])
+}
+
+model Notification {
+  id            String           @id @default(cuid())
+  userId        String
+  type          NotificationType
+  message       String
+  relatedTaskId String?
+  isRead        Boolean          @default(false)
+  createdAt     DateTime         @default(now())
+
+  user        User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  relatedTask Task? @relation(fields: [relatedTaskId], references: [id], onDelete: SetNull)
+
+  // Unread badge count and "my notifications" list are both
+  // WHERE userId = ? [AND isRead = ?] ORDER BY createdAt DESC.
+  @@index([userId, isRead, createdAt])
+}
